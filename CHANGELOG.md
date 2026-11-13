@@ -1,32 +1,32 @@
-# Cambios
+# Changelog
 
 ## 0.4.0
 
-Compilar sin grabar: StutterFree lee los shaders de los archivos del juego y planifica las pipelines él mismo.
+Compiling without a recording: StutterFree reads the shaders from the game's files and plans the pipelines itself.
 
-- **Unity (DirectX 11):** archivos serializados y paquetes UnityFS (LZ4/LZMA); cada shader DX11 se compila una vez.
-- **Unreal Engine 4/5:** `.pak` (v3-11) e IoStore `.utoc/.ucas` sin cifrar (Oodle, zlib, LZ4); bibliotecas
-  `ShaderArchive-*.ushaderbytecode`; detección de la versión del motor y de DX11/DX12.
-  - DX11: cada shader, y los pares de teselación (HS+DS) de cada material.
-  - DX12: firmas raíz de Unreal reconstruidas (reglas de 4.20 a 5.8, a partir de los contadores de recursos de cada
-    shader, con el checksum DXBC real) y pipelines de estado neutro: compute, VS, VS→PS y VS→GS(→PS) de cada material,
-    cadenas globales, PS de material tras los VS globales y, en UE5, PS compartidos por muchos materiales.
-  - Quedan fuera los shaders con un `[WaveSize]` que la GPU no ejecuta (NVIDIA: 32; AMD: 32-64).
-- **FromSoftware:** archivos BHD5/BDT (RSA, AES, DCX, BND4).
-  - Dark Souls III / Remastered (DX11), con pares de teselación. Las claves de DS3 se descargan una vez de las
-    publicadas por UXM Selective Unpack.
-  - Elden Ring / Nightreign (DX12): la firma raíz que lleva cada shader, reescrita a la versión 1.0 que crea el juego.
-- Probado vía Proton: MECCHA CHAMELEON (UE 5.5, 38.426 pipelines), Dark Souls III (4.089), Elden Ring (161.387), todos
-  sin fallos.
-- **App:** cada tarjeta muestra qué se compiló desde los archivos ("From Game Files"); las carátulas ya no parpadean al
-  hacer scroll; botón de Ko-fi; opción de escanear al abrir (también `settings --scan-on-startup on|off` en la CLI).
-- **Más ligera:** el escaneo ya no guarda la lista de los millones de archivos de la caché de Mesa (818 MB → 173 MB de
-  RAM, y más rápido); interfaz con OpenGL (`glow`); un solo ejecutable para la app y la línea de comandos. El AppImage
-  pasa de 15,4 a 10,1 MB.
-- `stutterfree-cli plan <juego>` muestra el plan sin compilar. `STUTTERFREE_WARM_LOG=<archivo>` guarda los errores de
-  vkd3d-proton del warmer, y si el warmer se para antes de tiempo ahora se avisa.
+- **Unity (DirectX 11):** serialized files and UnityFS bundles (LZ4/LZMA); every DX11 shader is compiled once.
+- **Unreal Engine 4/5:** `.pak` (v3-11) and unencrypted IoStore `.utoc/.ucas` (Oodle, zlib, LZ4);
+  `ShaderArchive-*.ushaderbytecode` libraries; engine version and DX11/DX12 detection.
+  - DX11: every shader, plus the tessellation pairs (HS+DS) of each material.
+  - DX12: Unreal's root signatures rebuilt (rules for 4.20 to 5.8, from each shader's resource counts, with the real
+    DXBC checksum) and neutral-state pipelines: compute, VS, VS→PS and VS→GS(→PS) of each material, global chains,
+    material PSs behind the global VSs and, on UE5, PSs shared by many materials.
+  - Shaders with a `[WaveSize]` the GPU can't run are left out (NVIDIA: 32; AMD: 32-64).
+- **FromSoftware:** BHD5/BDT archives (RSA, AES, DCX, BND4).
+  - Dark Souls III / Remastered (DX11), with tessellation pairs. DS3's keys are downloaded once from the ones published
+    by UXM Selective Unpack.
+  - Elden Ring / Nightreign (DX12): the root signature each shader carries, rewritten to the 1.0 version the game creates.
+- Tested through Proton: MECCHA CHAMELEON (UE 5.5, 38,426 pipelines), Dark Souls III (4,089), Elden Ring (161,387), all
+  without failures.
+- **App:** each card shows what was compiled from the files ("From Game Files"); banners no longer flicker when
+  scrolling; Ko-fi button; option to scan on startup (also `settings --scan-on-startup on|off` in the CLI).
+- **Lighter:** the scan no longer keeps a list of the millions of files in the Mesa cache (818 MB → 173 MB of RAM, and
+  faster); OpenGL interface (`glow`); a single executable for the app and the command line. The AppImage goes from 15.4
+  to 10.1 MB.
+- `plan <game>` shows the plan without compiling. `STUTTERFREE_WARM_LOG=<file>` keeps vkd3d-proton's errors from the
+  warmer, and a warmer that stops early is now reported.
 
 ## 0.3.0-beta
 
-Reescritura en Rust de Shaderless 0.2.3-beta, con interfaz nativa (egui) y AppImage: detección de juegos (Steam,
-Heroic, Lutris), modo Record, compilación desde la grabación vía Proton, gestión de cachés NVIDIA/Mesa/vkd3d.
+Rust rewrite of Shaderless 0.2.3-beta, with a native interface (egui) and an AppImage: game detection (Steam, Heroic,
+Lutris), Record mode, compiling from the recording through Proton, NVIDIA/Mesa/vkd3d cache management.
