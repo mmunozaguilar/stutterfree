@@ -1,0 +1,21 @@
+[package]
+name = "stutterfree"
+description = "StutterFree desktop app (native egui window over the StutterFree core)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "stutterfree"
+path = "src/main.rs"
+
+[dependencies]
+stutterfree-cli = { path = "../stutterfree-cli" }
+stutterfree-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# glow (OpenGL), not the default wgpu: 6 MB smaller, same 180 fps and memory (measured on RADV)
+eframe = { version = "0.37", default-features = false, features = ["accesskit", "clipboard", "default_fonts", "links", "system_fonts", "wayland", "x11", "glow"] }
+egui_extras = { version = "0.37", features = ["image", "file"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }

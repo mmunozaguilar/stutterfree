@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=StutterFree
+GenericName=Shader stutter killer
+Comment=Pre-compile your Proton games' shaders so they don't stutter (based on Shaderless / SCSKiller)
+Exec=stutterfree
+Icon=stutterfree
+Terminal=false
+Categories=Game;Utility;
+StartupWMClass=stutterfree

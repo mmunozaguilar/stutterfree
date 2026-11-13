@@ -1,0 +1,38 @@
+#!/bin/sh
+# StutterFree AppImage entry point.
+#   StutterFree.AppImage                 -> the desktop app
+#   StutterFree.AppImage <command> ...   -> the command line (status, list, diagnose, settings, record, compile, ...)
+#   StutterFree.AppImage --install-desktop / --uninstall-desktop -> app menu entry pointing at this AppImage
+HERE="$(dirname "$(readlink -f "$0")")"
+export STUTTERFREE_NATIVE_DIR="$HERE/usr/share/stutterfree/native"
+SELF="${APPIMAGE:-$HERE/AppRun}"
+
+install_desktop() {
+    apps="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+    icons="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor"
+    mkdir -p "$apps"
+    for s in 64 128 256 512; do
+        mkdir -p "$icons/${s}x${s}/apps"
+        cp "$HERE/usr/share/icons/hicolor/${s}x${s}/apps/stutterfree.png" "$icons/${s}x${s}/apps/stutterfree.png"
+    done
+    mkdir -p "$icons/scalable/apps" && cp "$HERE/usr/share/icons/hicolor/scalable/apps/stutterfree.svg" "$icons/scalable/apps/stutterfree.svg"
+    sed -e "s|^Exec=.*|Exec=\"$SELF\"|" -e "s|^Icon=.*|Icon=$icons/256x256/apps/stutterfree.png|" "$HERE/stutterfree.desktop" > "$apps/stutterfree.desktop"
+    chmod +x "$apps/stutterfree.desktop"
+    # the menu entry of the Shaderless builds this replaces
+    rm -f "$apps/shaderless.desktop"
+    command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$apps" >/dev/null 2>&1
+    command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -q -t "$icons" >/dev/null 2>&1
+    # KDE reads launchers and icons from its own cache (ksycoca)
+    for k in kbuildsycoca6 kbuildsycoca5; do command -v "$k" >/dev/null 2>&1 && { "$k" >/dev/null 2>&1; break; }; done
+    echo "StutterFree added to your app menu ($apps/stutterfree.desktop -> $SELF)"
+}
+
+case "$1" in
+    --install-desktop) install_desktop; exit 0 ;;
+    --uninstall-desktop)
+        rm -f "${XDG_DATA_HOME:-$HOME/.local/share}/applications/stutterfree.desktop"
+        echo "StutterFree removed from your app menu."; exit 0 ;;
+    cli) shift; exec "$HERE/usr/bin/stutterfree" --cli "$@" ;;
+esac
+# one binary: it opens the window, or runs the command line when given a command (list, compile, ...) or --cli
+exec "$HERE/usr/bin/stutterfree" "$@"

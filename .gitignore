@@ -1,0 +1,5 @@
+target/
+dist/
+# built by build-native.sh (mingw)
+native/*.dll
+native/*.exe

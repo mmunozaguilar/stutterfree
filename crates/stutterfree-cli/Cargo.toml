@@ -1,0 +1,18 @@
+[package]
+name = "stutterfree-cli"
+description = "StutterFree command line"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "stutterfree-cli"
+path = "src/main.rs"
+
+[dependencies]
+stutterfree-core.workspace = true
+libc = "0.2"
