@@ -39,6 +39,14 @@ struct Shared {
     diag: Option<DiscoveryReport>,
     diag_running: bool,
     errors: Vec<String>,
+    /// armed games that are running: when they were first seen running and (time, pipelines recorded) samples
+    live: HashMap<String, (Instant, Vec<(Instant, i32)>)>,
+}
+
+/// What the card shows of a recording in progress (the samples cover the last ~70 s).
+fn live_rec(started: Instant, samples: &[(Instant, i32)]) -> Option<LiveRec> {
+    let (last, first) = (samples.last()?, samples.first()?);
+    Some(LiveRec { secs: last.0.duration_since(started).as_secs(), count: last.1, last_minute: last.1 - first.1 })
 }
 
 /// The core side: scans, compiles and recorder changes run on worker threads and publish into [`Shared`].
@@ -233,6 +241,31 @@ impl StutterFreeApp {
                 }
             },
         );
+
+        // recordings in progress: every 5 s, how many pipelines each running armed game has recorded (the recorder writes
+        // each one to its shaderless.db as the game creates it)
+        let rec = core.clone();
+        std::thread::spawn(move || loop {
+            std::thread::sleep(Duration::from_secs(5));
+            let running: Vec<(String, i32)> = rec
+                .games()
+                .iter()
+                .filter(|g| g.recorder_installed && proton::is_game_running(g))
+                .map(|g| (g.id.clone(), recorder::recorded_psos(g)))
+                .collect();
+            if running.is_empty() && rec.read(|s| s.live.is_empty()) {
+                continue;
+            }
+            rec.with(|s| {
+                let now = Instant::now();
+                s.live.retain(|id, _| running.iter().any(|(r, _)| r == id));
+                for (id, n) in running {
+                    let (_, samples) = s.live.entry(id).or_insert_with(|| (now, Vec::new()));
+                    samples.push((now, n));
+                    samples.retain(|(at, _)| now.duration_since(*at) <= Duration::from_secs(70));
+                }
+            });
+        });
 
         // a Proton switch in a launcher refreshes the cards
         let watch = core.clone();
@@ -452,7 +485,8 @@ impl StutterFreeApp {
                 for g in row {
                     ui.allocate_ui_with_layout(Vec2::new(card_w, 0.0), Layout::top_down(Align::Min), |ui| {
                         ui.set_width(card_w);
-                        if let Some(action) = game_card(ui, g, s.progress.get(&g.id), compiling, card_w) {
+                        let live = s.live.get(&g.id).and_then(|(started, samples)| live_rec(*started, samples));
+                        if let Some(action) = game_card(ui, g, s.progress.get(&g.id), live.as_ref(), compiling, card_w) {
                             self.on_card_action(action, g);
                         }
                     });

@@ -188,6 +188,16 @@ mod tests {
     use super::*;
 
     #[test]
+    fn recording_status_says_when_enough() {
+        assert!(recording_status(false, None).is_none());
+        assert!(recording_status(true, None).unwrap().0.starts_with("Armed"));
+        let live = |secs, last_minute| LiveRec { secs, count: 500, last_minute };
+        assert!(recording_status(true, Some(&live(60, 3))).unwrap().0.starts_with("● Recording")); // too early to tell
+        assert!(recording_status(true, Some(&live(300, 150))).unwrap().0.starts_with("● Recording")); // still finding new ones
+        assert!(recording_status(true, Some(&live(300, 3))).unwrap().0.starts_with("✔"));
+    }
+
+    #[test]
     fn cover_crops_the_edges_and_keeps_the_aspect() {
         let uv = cover_uv(Vec2::new(460.0, 215.0), Vec2::new(800.0, 150.0));
         assert!(uv.left() >= 6.0 / 460.0 - 1e-6 && uv.right() <= 1.0 - 6.0 / 460.0 + 1e-6);
@@ -254,8 +264,32 @@ fn source_badge(g: &GameInfo) -> (String, Color32, Color32) {
     (if g.is_flatpak { format!("{name} (Flatpak)") } else { name.to_string() }, fg, bg)
 }
 
+/// A recording in progress: seconds since the game was seen running, pipelines recorded, how many of them are new in the
+/// last minute.
+pub struct LiveRec {
+    pub secs: u64,
+    pub count: i32,
+    pub last_minute: i32,
+}
+
+/// The recorder's line on the card (None: not armed). shortcut: "enough" is a heuristic (3+ minutes and under 20 new
+/// pipelines in the last minute: what the area played needs is mostly recorded); a new area or setting brings more.
+pub fn recording_status(armed: bool, live: Option<&LiveRec>) -> Option<(String, Color32)> {
+    match live {
+        None if armed => Some(("Armed: launch the game to record its pipelines".into(), MUTED)),
+        None => None,
+        Some(l) if l.secs >= 180 && l.last_minute < 20 => {
+            Some((format!("✔ Few new pipelines ({} in the last minute): you can close the game and press Compile", l.last_minute), GREEN_TEXT))
+        }
+        Some(l) => Some((
+            format!("● Recording: {} pipelines (+{} in the last minute). Keep playing, ideally in the open world.", n0(l.count as i64), n0(l.last_minute as i64)),
+            PURPLE,
+        )),
+    }
+}
+
 /// One game's card; returns the action the user clicked.
-pub fn game_card(ui: &mut Ui, g: &GameInfo, progress: Option<&CompilationProgress>, compiling_any: bool, width: f32) -> Option<CardAction> {
+pub fn game_card(ui: &mut Ui, g: &GameInfo, progress: Option<&CompilationProgress>, live: Option<&LiveRec>, compiling_any: bool, width: f32) -> Option<CardAction> {
     let id = egui::Id::unique(("card", &g.id));
     let hovered = ui.ctx().data(|d| d.get_temp::<bool>(id)).unwrap_or(false);
     let mut action = None;
@@ -312,14 +346,15 @@ pub fn game_card(ui: &mut Ui, g: &GameInfo, progress: Option<&CompilationProgres
                     "On-Disk Shader Cache:",
                     bold(&format_bytes(g.cache_size_bytes), 13.5).color(if g.cache_size_bytes > 0 { GREEN_TEXT } else { TEXT }),
                 );
-                let mut rec = n0(g.recorded_psos as i64);
-                if g.new_recorded_psos > 0 {
+                let recorded = live.map(|l| l.count).unwrap_or(g.recorded_psos);
+                let mut rec = n0(recorded as i64);
+                if g.new_recorded_psos > 0 && live.is_none() {
                     rec.push_str(&format!(" (+{} new)", n0(g.new_recorded_psos as i64)));
                 }
-                if g.recorder_installed {
-                    rec.push_str(" • recording");
+                meta_row(ui, "Recorded Pipelines:", bold(&rec, 13.5).color(if recorded > 0 { PURPLE } else { TEXT }));
+                if let Some((text, color)) = recording_status(g.recorder_installed, live) {
+                    ui.label(RichText::new(text).size(12.0).color(color));
                 }
-                meta_row(ui, "Recorded Pipelines:", bold(&rec, 13.5).color(if g.recorded_psos > 0 { PURPLE } else { TEXT }));
                 if let Some(plan) = &g.plan_label {
                     meta_row(ui, "From Game Files:", bold(plan, 13.5).color(ACCENT));
                 }
