@@ -192,6 +192,16 @@ fn recorded_keys(game: &GameInfo) -> HashSet<String> {
     keys
 }
 
+/// The recorder next to the exe is loaded into the running game (mapped in one of its processes). A game that loads
+/// d3d12.dll straight from System32 (NVIDIA Streamline's interposer, Cyberpunk 2077) never loads it.
+pub fn recorder_loaded(game: &GameInfo) -> bool {
+    let Some(dir) = exe_dir(game) else { return false };
+    let dll = Path::new(&dir).join("d3d12.dll").to_string_lossy().to_lowercase();
+    crate::proton::game_pids(game).iter().any(|pid| {
+        fs::read_to_string(format!("/proc/{pid}/maps")).map(|m| m.lines().any(|l| l.to_lowercase().ends_with(&dll))).unwrap_or(false)
+    })
+}
+
 /// Pipelines recorded so far: Shaderless's copy plus what the inbox holds that the copy doesn't.
 pub fn recorded_psos(game: &GameInfo) -> i32 {
     recorded_keys(game).len() as i32

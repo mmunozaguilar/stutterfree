@@ -191,10 +191,14 @@ mod tests {
     fn recording_status_says_when_enough() {
         assert!(recording_status(false, None).is_none());
         assert!(recording_status(true, None).unwrap().0.starts_with("Armed"));
-        let live = |secs, last_minute| LiveRec { secs, count: 500, last_minute };
+        let live = |secs, last_minute| LiveRec { secs, count: 500, last_minute, loaded: true };
         assert!(recording_status(true, Some(&live(60, 3))).unwrap().0.starts_with("● Recording")); // too early to tell
         assert!(recording_status(true, Some(&live(300, 150))).unwrap().0.starts_with("● Recording")); // still finding new ones
         assert!(recording_status(true, Some(&live(300, 3))).unwrap().0.starts_with("✔"));
+        // a recorder the game never loaded never says "enough" (Cyberpunk: 0 a minute, nothing recorded)
+        let skipped = |secs| LiveRec { secs, count: 0, last_minute: 0, loaded: false };
+        assert!(recording_status(true, Some(&skipped(10))).unwrap().0.starts_with("Waiting"));
+        assert!(recording_status(true, Some(&skipped(300))).unwrap().0.starts_with("⚠ Not recording"));
     }
 
     #[test]
@@ -270,6 +274,8 @@ pub struct LiveRec {
     pub secs: u64,
     pub count: i32,
     pub last_minute: i32,
+    /// the recorder is mapped in the game's process
+    pub loaded: bool,
 }
 
 /// The recorder's line on the card (None: not armed). shortcut: "enough" is a heuristic (3+ minutes and under 20 new
@@ -278,6 +284,12 @@ pub fn recording_status(armed: bool, live: Option<&LiveRec>) -> Option<(String, 
     match live {
         None if armed => Some(("Armed: launch the game to record its pipelines".into(), MUTED)),
         None => None,
+        // d3d12.dll loads with the device, a few seconds in: only then is a missing recorder a verdict
+        Some(l) if !l.loaded && l.secs < 30 => Some(("Waiting for the game to load DirectX 12…".into(), MUTED)),
+        Some(l) if !l.loaded => Some((
+            "⚠ Not recording: the game loaded DirectX 12 without the recorder (it loads it from System32, e.g. through NVIDIA Streamline). This game can't be recorded.".into(),
+            ORANGE,
+        )),
         Some(l) if l.secs >= 180 && l.last_minute < 20 => {
             Some((format!("✔ Few new pipelines ({} in the last minute): you can close the game and press Compile", l.last_minute), GREEN_TEXT))
         }

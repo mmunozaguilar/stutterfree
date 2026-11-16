@@ -1504,6 +1504,16 @@ pub fn is_game_running(game: &GameInfo) -> bool {
 }
 
 pub fn is_game_running_in(game: &GameInfo, proc_root: &Path) -> bool {
+    !game_pids_in(game, proc_root).is_empty()
+}
+
+/// The processes of the game (its exe or another exe of its folder; the warmer's work folders aside).
+pub fn game_pids(game: &GameInfo) -> Vec<String> {
+    game_pids_in(game, Path::new("/proc"))
+}
+
+fn game_pids_in(game: &GameInfo, proc_root: &Path) -> Vec<String> {
+    let mut found = Vec::new();
     let mut names: HashSet<String> = HashSet::new();
     if ends_with_ci(&game.executable_path, ".exe") {
         names.insert(file_name(p(&game.executable_path)).to_lowercase());
@@ -1517,10 +1527,10 @@ pub fn is_game_running_in(game: &GameInfo, proc_root: &Path) -> bool {
         }
     }
     if names.is_empty() || !proc_root.is_dir() {
-        return false;
+        return found;
     }
     let work_root = data_dir().join("work").to_string_lossy().to_lowercase();
-    let Ok(rd) = fs::read_dir(proc_root) else { return false };
+    let Ok(rd) = fs::read_dir(proc_root) else { return found };
     for e in rd.flatten() {
         let pid = e.file_name().to_string_lossy().into_owned();
         if !pid.bytes().all(|b| b.is_ascii_digit()) {
@@ -1538,11 +1548,12 @@ pub fn is_game_running_in(game: &GameInfo, proc_root: &Path) -> bool {
             let a = arg.replace('\\', "/");
             let fname = a.rsplit('/').next().unwrap_or(&a);
             if names.contains(fname) {
-                return true;
+                found.push(pid.clone());
+                break;
             }
         }
     }
-    false
+    found
 }
 
 /// Removes what [`install_caches_where_game_reads`] put in the game's cache folders.

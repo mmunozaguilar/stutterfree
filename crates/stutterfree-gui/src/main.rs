@@ -39,14 +39,15 @@ struct Shared {
     diag: Option<DiscoveryReport>,
     diag_running: bool,
     errors: Vec<String>,
-    /// armed games that are running: when they were first seen running and (time, pipelines recorded) samples
-    live: HashMap<String, (Instant, Vec<(Instant, i32)>)>,
+    /// armed games that are running: when they were first seen running, (time, pipelines recorded) samples, and whether
+    /// the recorder is loaded in the game
+    live: HashMap<String, (Instant, Vec<(Instant, i32)>, bool)>,
 }
 
 /// What the card shows of a recording in progress (the samples cover the last ~70 s).
-fn live_rec(started: Instant, samples: &[(Instant, i32)]) -> Option<LiveRec> {
+fn live_rec(started: Instant, samples: &[(Instant, i32)], loaded: bool) -> Option<LiveRec> {
     let (last, first) = (samples.last()?, samples.first()?);
-    Some(LiveRec { secs: last.0.duration_since(started).as_secs(), count: last.1, last_minute: last.1 - first.1 })
+    Some(LiveRec { secs: last.0.duration_since(started).as_secs(), count: last.1, last_minute: last.1 - first.1, loaded })
 }
 
 /// The core side: scans, compiles and recorder changes run on worker threads and publish into [`Shared`].
@@ -247,20 +248,21 @@ impl StutterFreeApp {
         let rec = core.clone();
         std::thread::spawn(move || loop {
             std::thread::sleep(Duration::from_secs(5));
-            let running: Vec<(String, i32)> = rec
+            let running: Vec<(String, i32, bool)> = rec
                 .games()
                 .iter()
                 .filter(|g| g.recorder_installed && proton::is_game_running(g))
-                .map(|g| (g.id.clone(), recorder::recorded_psos(g)))
+                .map(|g| (g.id.clone(), recorder::recorded_psos(g), recorder::recorder_loaded(g)))
                 .collect();
             if running.is_empty() && rec.read(|s| s.live.is_empty()) {
                 continue;
             }
             rec.with(|s| {
                 let now = Instant::now();
-                s.live.retain(|id, _| running.iter().any(|(r, _)| r == id));
-                for (id, n) in running {
-                    let (_, samples) = s.live.entry(id).or_insert_with(|| (now, Vec::new()));
+                s.live.retain(|id, _| running.iter().any(|(r, ..)| r == id));
+                for (id, n, loaded) in running {
+                    let (_, samples, is_loaded) = s.live.entry(id).or_insert_with(|| (now, Vec::new(), false));
+                    *is_loaded = loaded;
                     samples.push((now, n));
                     samples.retain(|(at, _)| now.duration_since(*at) <= Duration::from_secs(70));
                 }
@@ -485,7 +487,7 @@ impl StutterFreeApp {
                 for g in row {
                     ui.allocate_ui_with_layout(Vec2::new(card_w, 0.0), Layout::top_down(Align::Min), |ui| {
                         ui.set_width(card_w);
-                        let live = s.live.get(&g.id).and_then(|(started, samples)| live_rec(*started, samples));
+                        let live = s.live.get(&g.id).and_then(|(started, samples, loaded)| live_rec(*started, samples, *loaded));
                         if let Some(action) = game_card(ui, g, s.progress.get(&g.id), live.as_ref(), compiling, card_w) {
                             self.on_card_action(action, g);
                         }
